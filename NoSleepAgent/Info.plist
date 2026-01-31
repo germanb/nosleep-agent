@@ -20,5 +20,9 @@
     <string>ClaudeBar</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
+    <key>NSUserNotificationAlertStyle</key>
+    <string>alert</string>
+    <key>NSUserNotificationUsageDescription</key>
+    <string>NoSleepAgent sends notifications when Claude completes tasks.</string>
 </dict>
 </plist>

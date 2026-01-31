@@ -3,8 +3,10 @@ import ServiceManagement
 
 struct MenuContent: View {
     let monitor: StatusMonitor
+    let notificationManager: NotificationManager
     @State private var currentTime = Date()
     @State private var launchAtLogin = false
+    @AppStorage("notificationsEnabled") private var notificationsEnabled = false
 
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -38,6 +40,15 @@ struct MenuContent: View {
             Toggle("Launch at Login", isOn: $launchAtLogin)
                 .onChange(of: launchAtLogin) { _, newValue in
                     toggleLaunchAtLogin(newValue)
+                }
+
+            Toggle("Enable Notifications", isOn: $notificationsEnabled)
+                .onChange(of: notificationsEnabled) { _, newValue in
+                    if newValue {
+                        Task {
+                            await notificationManager.requestPermissions()
+                        }
+                    }
                 }
 
             Divider()

@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftUI
 
 @Observable
 @MainActor
@@ -12,6 +13,11 @@ final class StatusMonitor {
     private var dispatchSource: DispatchSourceFileSystemObject?
     private var pollTimer: Timer?
     private var workingStartTime: Date?
+    private var notificationManager: NotificationManager?
+
+    init(notificationManager: NotificationManager? = nil) {
+        self.notificationManager = notificationManager
+    }
 
     func startMonitoring() {
         checkStatus()
@@ -96,6 +102,19 @@ final class StatusMonitor {
 
     private func transitionToIdle() {
         if status.isWorking {
+            // Send completion notification if enabled and duration >= 5 minutes
+            if UserDefaults.standard.bool(forKey: "notificationsEnabled"),
+               let startTime = workingStartTime {
+                let duration = Date().timeIntervalSince(startTime)
+                if duration >= 300 { // 5 minutes in seconds
+                    let taskPrompt = status.task?.prompt
+                    notificationManager?.sendCompletionNotification(
+                        duration: duration,
+                        task: taskPrompt
+                    )
+                }
+            }
+
             workingStartTime = nil
             status = .idle
         }
