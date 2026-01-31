@@ -7,15 +7,22 @@ import AppKit
 class NotificationManager: ObservableObject {
     @Published var hasPermission = false
     private var hasRequestedPermission = false
+    private var isAvailable = false
 
     init() {
-        checkPermissionStatus()
+        // Check if running in a proper app bundle (required for UserNotifications)
+        isAvailable = Bundle.main.bundleIdentifier != nil
+        if isAvailable {
+            checkPermissionStatus()
+        }
     }
 
     // MARK: - Permission Management
 
     /// Check current notification permission status
     private func checkPermissionStatus() {
+        guard isAvailable else { return }
+
         UNUserNotificationCenter.current().getNotificationSettings { [weak self] settings in
             Task { @MainActor in
                 self?.hasPermission = settings.authorizationStatus == .authorized
@@ -25,6 +32,11 @@ class NotificationManager: ObservableObject {
 
     /// Request notification permissions (ask once)
     func requestPermissions() async -> Bool {
+        guard isAvailable else {
+            print("UserNotifications not available (app not running in bundle)")
+            return false
+        }
+
         // Only ask once per app lifecycle
         guard !hasRequestedPermission else { return hasPermission }
         hasRequestedPermission = true
@@ -48,7 +60,7 @@ class NotificationManager: ObservableObject {
 
     /// Send completion notification for tasks >= 5 minutes
     func sendCompletionNotification(duration: TimeInterval, task: String?) {
-        guard hasPermission else { return }
+        guard isAvailable && hasPermission else { return }
 
         // Format duration
         let minutes = Int(duration) / 60
