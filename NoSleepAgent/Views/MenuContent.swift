@@ -22,7 +22,7 @@ public struct MenuContent: View {
             if !processes.isEmpty {
                 ProcessesSectionView(
                     processes: processes,
-                    activeProject: monitor.status.isWorking ? monitor.status.task?.project : nil,
+                    activePID: monitor.getActiveClaudePID(),
                     onKillProcess: { pid in
                         _ = processMonitor.killProcess(pid)
                         Task {
@@ -123,7 +123,7 @@ struct MenuDivider: View {
 /// Processes section with native macOS list style
 struct ProcessesSectionView: View {
     let processes: [ClaudeProcess]
-    let activeProject: String?
+    let activePID: Int32?
     let onKillProcess: (Int32) -> Void
 
     var body: some View {
@@ -141,33 +141,13 @@ struct ProcessesSectionView: View {
             ForEach(processes) { process in
                 ProcessRowView(
                     process: process,
-                    isActive: isActiveProcess(process),
+                    isActive: activePID == process.pid,
                     onKill: {
                         onKillProcess(process.pid)
                     }
                 )
             }
         }
-    }
-
-    // Determine if this process is the active one
-    // If multiple processes share the same project, only the most recent (highest PID) is active
-    private func isActiveProcess(_ process: ClaudeProcess) -> Bool {
-        guard let activeProject = activeProject,
-              !process.project.isEmpty,
-              process.project == activeProject else {
-            return false
-        }
-
-        // Find all processes with the same project
-        let sameProjectProcesses = processes.filter { $0.project == process.project }
-
-        // If only one process with this project, it's active
-        guard sameProjectProcesses.count > 1 else { return true }
-
-        // Show active only on the most recent (highest PID) process
-        let mostRecent = sameProjectProcesses.max(by: { $0.pid < $1.pid })
-        return mostRecent?.pid == process.pid
     }
 }
 
