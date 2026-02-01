@@ -125,10 +125,7 @@ struct ClaudeStatusTests {
         let startTime = Date().addingTimeInterval(-45) // 45 seconds ago
         let status = ClaudeStatus.working(since: startTime, task: nil)
 
-        let displayText = status.displayText
-        #expect(displayText.hasPrefix("Working ("))
-        #expect(displayText.contains("s)"))
-        #expect(!displayText.contains("m"))
+        #expect(status.displayText == "Working")
     }
 
     @Test("Display text when working (minutes)")
@@ -136,10 +133,7 @@ struct ClaudeStatusTests {
         let startTime = Date().addingTimeInterval(-125) // 2 minutes, 5 seconds ago
         let status = ClaudeStatus.working(since: startTime, task: nil)
 
-        let displayText = status.displayText
-        #expect(displayText.hasPrefix("Working ("))
-        #expect(displayText.contains("m"))
-        #expect(displayText.contains("s)"))
+        #expect(status.displayText == "Working")
     }
 
     @Test("Display text with exact minute")
@@ -147,7 +141,6 @@ struct ClaudeStatusTests {
         let startTime = Date().addingTimeInterval(-120) // Exactly 2 minutes ago
         let status = ClaudeStatus.working(since: startTime, task: nil)
 
-        let displayText = status.displayText
-        #expect(displayText.contains("2m 0s") || displayText.contains("1m 59s") || displayText.contains("2m 1s"))
+        #expect(status.displayText == "Working")
     }
 }

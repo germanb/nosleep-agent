@@ -13,7 +13,7 @@ public struct MenuContent: View {
     @State private var processes: [ClaudeProcess] = []
     @AppStorage("notificationsEnabled") private var notificationsEnabled = false
 
-    private let processTimer = Timer.publish(every: 15, on: .main, in: .common).autoconnect()
+    private let processTimer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
     private let processMonitor = ProcessMonitor()
 
     public var body: some View {
@@ -22,7 +22,6 @@ public struct MenuContent: View {
             if !processes.isEmpty {
                 ProcessesSectionView(
                     processes: processes,
-                    currentTask: monitor.status.task,
                     onKillProcess: { pid in
                         _ = processMonitor.killProcess(pid)
                         Task {
@@ -123,7 +122,6 @@ struct MenuDivider: View {
 /// Processes section with native macOS list style
 struct ProcessesSectionView: View {
     let processes: [ClaudeProcess]
-    let currentTask: TaskInfo?
     let onKillProcess: (Int32) -> Void
 
     var body: some View {
@@ -141,7 +139,6 @@ struct ProcessesSectionView: View {
             ForEach(processes) { process in
                 ProcessRowView(
                     process: process,
-                    taskInfo: shouldShowTask(for: process) ? currentTask : nil,
                     onKill: {
                         onKillProcess(process.pid)
                     }
@@ -149,107 +146,40 @@ struct ProcessesSectionView: View {
             }
         }
     }
-
-    // Show task only on the most active process for that project
-    // This prevents duplicate task info when multiple instances run in same folder
-    private func shouldShowTask(for process: ClaudeProcess) -> Bool {
-        guard let task = currentTask else { return false }
-        guard !process.project.isEmpty && process.project == task.project else { return false }
-
-        // Find all processes with the same project
-        let sameProjectProcesses = processes.filter { $0.project == process.project }
-
-        // If only one process, show the task
-        guard sameProjectProcesses.count > 1 else { return true }
-
-        // Show task only on the process with highest CPU usage
-        let mostActive = sameProjectProcesses.max(by: { $0.cpuPercent < $1.cpuPercent })
-        return mostActive?.pid == process.pid
-    }
 }
 
 /// Native macOS menu item with status dot and hover effect
 struct ProcessRowView: View {
     let process: ClaudeProcess
-    let taskInfo: TaskInfo?
     let onKill: () -> Void
     @State private var isHovering = false
 
-    // Determine process status based on CPU usage
-    private var processStatus: ProcessStatus {
-        if process.cpuPercent > 15.0 {
-            return .active
-        } else if process.cpuPercent > 3.0 {
-            return .moderate
-        } else {
-            return .idle
-        }
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Main process row
-            HStack(spacing: 8) {
-                // Status indicator dot
-                Circle()
-                    .fill(processStatus.color)
-                    .frame(width: 6, height: 6)
+        HStack(spacing: 8) {
+            // Status indicator dot - green for active process
+            Circle()
+                .fill(Color.green)
+                .frame(width: 6, height: 6)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(process.project.isEmpty ? "claude-\(process.pid)" : process.project)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
+            Text(process.project.isEmpty ? "claude-\(process.pid)" : process.project)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
 
-                    Text("\(String(format: "%.1f", process.cpuPercent))% CPU")
-                        .font(.system(size: 11, weight: .regular))
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                }
+            Spacer(minLength: 8)
 
-                Spacer(minLength: 8)
-
-                // Kill button - appears on hover
-                Button(action: onKill) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 14))
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(.red)
-                }
-                .buttonStyle(.plain)
-                .opacity(isHovering ? 1 : 0)
+            // Kill button - appears on hover
+            Button(action: onKill) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 14))
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(.red)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-
-            // Task info - shown if this process has active task
-            if let task = taskInfo {
-                HStack(spacing: 6) {
-                    Rectangle()
-                        .fill(processStatus.color.opacity(0.3))
-                        .frame(width: 2)
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(task.shortPrompt)
-                            .font(.system(size: 11, weight: .regular))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        if !task.sessionSlug.isEmpty {
-                            Text(task.sessionSlug)
-                                .font(.system(size: 10, weight: .regular))
-                                .foregroundStyle(.tertiary)
-                                .lineLimit(1)
-                        }
-                    }
-                    .padding(.trailing, 8)
-                }
-                .padding(.leading, 22) // Align with text above
-                .padding(.trailing, 12)
-                .padding(.bottom, 6)
-            }
+            .buttonStyle(.plain)
+            .opacity(isHovering ? 1 : 0)
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: 4)
                 .fill(isHovering ? Color.accentColor.opacity(0.08) : Color.clear)
@@ -259,21 +189,6 @@ struct ProcessRowView: View {
             isHovering = hovering
         }
         .padding(.horizontal, 4)
-    }
-}
-
-// MARK: - Process Status
-enum ProcessStatus {
-    case active   // High CPU (> 15%)
-    case moderate // Medium CPU (3-15%)
-    case idle     // Low CPU (< 3%)
-
-    var color: Color {
-        switch self {
-        case .active: return .green
-        case .moderate: return .yellow
-        case .idle: return .secondary.opacity(0.5)
-        }
     }
 }
 
