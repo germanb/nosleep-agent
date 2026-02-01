@@ -141,13 +141,33 @@ struct ProcessesSectionView: View {
             ForEach(processes) { process in
                 ProcessRowView(
                     process: process,
-                    isActive: activeProject != nil && !process.project.isEmpty && process.project == activeProject,
+                    isActive: isActiveProcess(process),
                     onKill: {
                         onKillProcess(process.pid)
                     }
                 )
             }
         }
+    }
+
+    // Determine if this process is the active one
+    // If multiple processes share the same project, only the most recent (highest PID) is active
+    private func isActiveProcess(_ process: ClaudeProcess) -> Bool {
+        guard let activeProject = activeProject,
+              !process.project.isEmpty,
+              process.project == activeProject else {
+            return false
+        }
+
+        // Find all processes with the same project
+        let sameProjectProcesses = processes.filter { $0.project == process.project }
+
+        // If only one process with this project, it's active
+        guard sameProjectProcesses.count > 1 else { return true }
+
+        // Show active only on the most recent (highest PID) process
+        let mostRecent = sameProjectProcesses.max(by: { $0.pid < $1.pid })
+        return mostRecent?.pid == process.pid
     }
 }
 
