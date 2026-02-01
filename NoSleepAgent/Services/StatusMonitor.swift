@@ -4,8 +4,8 @@ import SwiftUI
 
 @Observable
 @MainActor
-final class StatusMonitor {
-    private(set) var status: ClaudeStatus = .idle
+public final class StatusMonitor {
+    public private(set) var status: ClaudeStatus = .idle
 
     private let pidFilePath = "/tmp/claude-caffeinate.pid"
     private let sessionParser = SessionParser()
@@ -15,17 +15,17 @@ final class StatusMonitor {
     private var workingStartTime: Date?
     private var notificationManager: NotificationManager?
 
-    init(notificationManager: NotificationManager? = nil) {
+    public init(notificationManager: NotificationManager? = nil) {
         self.notificationManager = notificationManager
     }
 
-    func startMonitoring() {
+    public func startMonitoring() {
         checkStatus()
         setupFileWatcher()
         setupPollTimer()
     }
 
-    func stopMonitoring() {
+    public func stopMonitoring() {
         dispatchSource?.cancel()
         dispatchSource = nil
         pollTimer?.invalidate()

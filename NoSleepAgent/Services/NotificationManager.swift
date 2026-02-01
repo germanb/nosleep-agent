@@ -4,12 +4,12 @@ import AppKit
 
 /// Minimal notification service for task completion alerts
 @MainActor
-class NotificationManager: ObservableObject {
-    @Published var hasPermission = false
+public class NotificationManager: ObservableObject {
+    @Published public var hasPermission = false
     private var hasRequestedPermission = false
     private var isAvailable = false
 
-    init() {
+    public init() {
         // Check if running in a proper app bundle (required for UserNotifications)
         isAvailable = Bundle.main.bundleIdentifier != nil
         if isAvailable {
@@ -31,7 +31,7 @@ class NotificationManager: ObservableObject {
     }
 
     /// Request notification permissions (ask once)
-    func requestPermissions() async -> Bool {
+    public func requestPermissions() async -> Bool {
         guard isAvailable else {
             print("UserNotifications not available (app not running in bundle)")
             return false
@@ -59,7 +59,7 @@ class NotificationManager: ObservableObject {
     // MARK: - Notifications
 
     /// Send completion notification for tasks >= 5 minutes
-    func sendCompletionNotification(duration: TimeInterval, task: String?) {
+    public func sendCompletionNotification(duration: TimeInterval, task: String?) {
         guard isAvailable && hasPermission else { return }
 
         // Format duration

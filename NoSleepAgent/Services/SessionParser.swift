@@ -1,14 +1,14 @@
 import Foundation
 
-struct SessionParser {
+public struct SessionParser {
     private let projectsPath: String
 
-    init() {
+    public init() {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         self.projectsPath = "\(home)/.claude/projects"
     }
 
-    func findActiveSession() -> TaskInfo? {
+    public func findActiveSession() -> TaskInfo? {
         let fileManager = FileManager.default
 
         // Find most recently modified .jsonl file across all project directories

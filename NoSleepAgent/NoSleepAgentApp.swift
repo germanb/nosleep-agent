@@ -1,4 +1,5 @@
 import SwiftUI
+import NoSleepAgentLib
 
 @main
 struct NoSleepAgentApp: App {

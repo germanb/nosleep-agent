@@ -1,15 +1,15 @@
 import SwiftUI
 
-enum IconStyle: String, CaseIterable, Identifiable {
+public enum IconStyle: String, CaseIterable, Identifiable {
     case coffee = "Coffee Cup"
     case sparkles = "Sparkles AI"
     case cpu = "CPU Agent"
     case gears = "Dual Gears"
     case circle = "Simple Dot"
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var icons: (active: String, inactive: String) {
+    public var icons: (active: String, inactive: String) {
         switch self {
         case .coffee: return ("cup.and.saucer.fill", "cup.and.saucer")
         case .sparkles: return ("sparkles", "sparkle")
@@ -20,11 +20,16 @@ enum IconStyle: String, CaseIterable, Identifiable {
     }
 }
 
-struct StatusIcon: View {
+public struct StatusIcon: View {
     let status: ClaudeStatus
     let style: IconStyle
 
-    var body: some View {
+    public init(status: ClaudeStatus, style: IconStyle) {
+        self.status = status
+        self.style = style
+    }
+
+    public var body: some View {
         let icons = style.icons
         Image(systemName: status.isWorking ? icons.active : icons.inactive)
             .symbolRenderingMode(.hierarchical)

@@ -1,11 +1,17 @@
 import Foundation
 
-struct TaskInfo: Equatable {
-    let prompt: String
-    let project: String
-    let sessionSlug: String
+public struct TaskInfo: Equatable {
+    public let prompt: String
+    public let project: String
+    public let sessionSlug: String
 
-    var shortPrompt: String {
+    public init(prompt: String, project: String, sessionSlug: String) {
+        self.prompt = prompt
+        self.project = project
+        self.sessionSlug = sessionSlug
+    }
+
+    public var shortPrompt: String {
         let firstLine = prompt.split(separator: "\n").first.map(String.init) ?? prompt
         if firstLine.count > 60 {
             return String(firstLine.prefix(57)) + "..."
@@ -14,26 +20,26 @@ struct TaskInfo: Equatable {
     }
 }
 
-enum ClaudeStatus: Equatable {
+public enum ClaudeStatus: Equatable {
     case idle
     case working(since: Date, task: TaskInfo?)
 
-    var isWorking: Bool {
+    public var isWorking: Bool {
         if case .working = self { return true }
         return false
     }
 
-    var duration: TimeInterval? {
+    public var duration: TimeInterval? {
         guard case .working(let since, _) = self else { return nil }
         return Date().timeIntervalSince(since)
     }
 
-    var task: TaskInfo? {
+    public var task: TaskInfo? {
         guard case .working(_, let task) = self else { return nil }
         return task
     }
 
-    var displayText: String {
+    public var displayText: String {
         switch self {
         case .idle:
             return "Idle"

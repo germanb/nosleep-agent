@@ -1,16 +1,21 @@
 import SwiftUI
 import ServiceManagement
 
-struct MenuContent: View {
+public struct MenuContent: View {
     let monitor: StatusMonitor
     let notificationManager: NotificationManager
+
+    public init(monitor: StatusMonitor, notificationManager: NotificationManager) {
+        self.monitor = monitor
+        self.notificationManager = notificationManager
+    }
     @State private var currentTime = Date()
     @State private var launchAtLogin = false
     @AppStorage("notificationsEnabled") private var notificationsEnabled = false
 
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
-    var body: some View {
+    public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(monitor.status.displayText)
                 .font(.headline)
