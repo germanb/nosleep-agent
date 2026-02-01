@@ -1,6 +1,6 @@
 import Foundation
 
-public struct ProcessInfo: Equatable, Identifiable {
+public struct ClaudeProcess: Equatable, Identifiable {
     public let pid: Int32
     public let cpuPercent: Double
 
