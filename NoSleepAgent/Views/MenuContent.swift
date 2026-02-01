@@ -9,12 +9,10 @@ public struct MenuContent: View {
         self.monitor = monitor
         self.notificationManager = notificationManager
     }
-    @State private var currentTime = Date()
     @State private var launchAtLogin = false
     @State private var processes: [ClaudeProcess] = []
     @AppStorage("notificationsEnabled") private var notificationsEnabled = false
 
-    private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     private let processTimer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
     private let processMonitor = ProcessMonitor()
 
@@ -77,9 +75,6 @@ public struct MenuContent: View {
             }
             .keyboardShortcut("q")
         }
-        .onReceive(timer) { _ in
-            currentTime = Date()
-        }
         .onReceive(processTimer) { _ in
             Task {
                 processes = await processMonitor.fetchProcesses()
@@ -90,16 +85,6 @@ public struct MenuContent: View {
             processes = await processMonitor.fetchProcesses()
         }
         .frame(width: 280)
-    }
-
-    private func formatDuration(_ interval: TimeInterval) -> String {
-        let minutes = Int(interval) / 60
-        let seconds = Int(interval) % 60
-        if minutes > 0 {
-            return "\(minutes)m \(seconds)s"
-        } else {
-            return "\(seconds)s"
-        }
     }
 
     private func checkLaunchAtLoginStatus() {
@@ -214,7 +199,6 @@ struct ProcessRowView: View {
                             .stroke(processStatus.color.opacity(0.3), lineWidth: 2)
                             .scaleEffect(processStatus == .active ? 1.4 : 1.0)
                             .opacity(processStatus == .active ? 0.6 : 0)
-                            .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: false), value: processStatus == .active)
                     )
 
                 VStack(alignment: .leading, spacing: 2) {
