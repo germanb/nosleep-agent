@@ -11,11 +11,9 @@ public struct MenuContent: View {
     }
     @State private var currentTime = Date()
     @State private var launchAtLogin = false
-    @State private var claudeProcesses: [ProcessInfo] = []
     @AppStorage("notificationsEnabled") private var notificationsEnabled = false
 
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-    private let processMonitor = ProcessMonitor()
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -44,31 +42,6 @@ public struct MenuContent: View {
 
             Divider()
 
-            // Claude Processes Section
-            if !claudeProcesses.isEmpty {
-                Text("Claude Processes")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-
-                ForEach(claudeProcesses) { process in
-                    HStack {
-                        Text("PID \(process.pid)")
-                            .font(.caption)
-                        Text(String(format: "%.0f%%", process.cpuPercent))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Button("Kill") {
-                            killProcess(pid: process.pid)
-                        }
-                        .buttonStyle(.borderless)
-                        .font(.caption)
-                    }
-                }
-
-                Divider()
-            }
-
             Toggle("Launch at Login", isOn: $launchAtLogin)
                 .onChange(of: launchAtLogin) { _, newValue in
                     toggleLaunchAtLogin(newValue)
@@ -95,7 +68,6 @@ public struct MenuContent: View {
         }
         .onAppear {
             checkLaunchAtLoginStatus()
-            refreshProcesses()
         }
     }
 
@@ -116,18 +88,6 @@ public struct MenuContent: View {
             } catch {
                 print("Failed to \(enabled ? "enable" : "disable") launch at login: \(error)")
             }
-        }
-    }
-
-    private func refreshProcesses() {
-        claudeProcesses = processMonitor.getClaudeProcesses()
-    }
-
-    private func killProcess(pid: Int32) {
-        _ = processMonitor.killProcess(pid: pid)
-        // Refresh the process list after a short delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            refreshProcesses()
         }
     }
 }
