@@ -194,12 +194,6 @@ struct ProcessRowView: View {
                 Circle()
                     .fill(processStatus.color)
                     .frame(width: 6, height: 6)
-                    .overlay(
-                        Circle()
-                            .stroke(processStatus.color.opacity(0.3), lineWidth: 2)
-                            .scaleEffect(processStatus == .active ? 1.4 : 1.0)
-                            .opacity(processStatus == .active ? 0.6 : 0)
-                    )
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(process.project.isEmpty ? "claude-\(process.pid)" : process.project)
@@ -224,7 +218,6 @@ struct ProcessRowView: View {
                 }
                 .buttonStyle(.plain)
                 .opacity(isHovering ? 1 : 0)
-                .animation(.easeOut(duration: 0.12), value: isHovering)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
@@ -265,7 +258,6 @@ struct ProcessRowView: View {
         .onHover { hovering in
             isHovering = hovering
         }
-        .animation(.easeOut(duration: 0.12), value: isHovering)
         .padding(.horizontal, 4)
     }
 }
