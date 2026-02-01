@@ -75,6 +75,16 @@ Simple: when Claude Code starts a task, the hooks run `caffeinate` to prevent sl
 - Task info comes from Claude session files (`~/.claude/projects/`)
 - May take a few seconds to appear after starting a task
 
+**Process count seems wrong?**
+- View real-time logs to see what's being detected:
+  ```bash
+  log stream --predicate 'subsystem == "com.nosleep.agent"' --level debug
+  ```
+- View recent logs:
+  ```bash
+  log show --predicate 'subsystem == "com.nosleep.agent"' --last 5m --info
+  ```
+
 ## Requirements
 
 - macOS 14.0 or later
