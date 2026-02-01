@@ -11,14 +11,11 @@ public final class ProcessMonitor {
     }
 
     public func fetchProcesses() async -> [ClaudeProcess] {
-        logger.debug("Starting process fetch")
         let output = await runPS()
-        logger.debug("ps aux returned \(output.count) bytes")
         var processes = parseProcesses(from: output)
 
         // Enrich with project names from working directories
         for i in processes.indices {
-            logger.debug("Enriching PID \(processes[i].pid) with project info")
             if let project = await getProjectName(for: processes[i].pid) {
                 processes[i] = ClaudeProcess(
                     pid: processes[i].pid,
@@ -28,7 +25,6 @@ public final class ProcessMonitor {
             }
         }
 
-        logger.debug("Detected \(processes.count) Claude Code processes")
         return processes
     }
 
@@ -58,20 +54,16 @@ public final class ProcessMonitor {
         var processes: [ClaudeProcess] = []
 
         let lines = output.components(separatedBy: .newlines)
-        logger.debug("Parsing ps output, found \(lines.count) total lines")
 
         for line in lines {
             // Only match lines containing "claude" (case-insensitive)
             guard line.lowercased().contains("claude") else { continue }
-
-            logger.debug("Found claude process: \(line)")
 
             // Exclude Claude Desktop app and all its helpers
             let lowerLine = line.lowercased()
             if lowerLine.contains("/applications/claude.app") ||
                lowerLine.contains("claude helper") ||
                lowerLine.contains("chrome-native-host") {
-                logger.debug("Excluding desktop app/helper: \(line)")
                 continue
             }
 
@@ -99,7 +91,6 @@ public final class ProcessMonitor {
             let isNodeWithClaude = executable.lowercased() == "node" && command.lowercased().contains("claude")
 
             guard isClaudeExecutable || isNodeWithClaude else {
-                logger.debug("Excluding non-Claude executable: \(command)")
                 continue
             }
 

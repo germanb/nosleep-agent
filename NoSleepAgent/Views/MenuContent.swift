@@ -13,7 +13,7 @@ public struct MenuContent: View {
     @State private var processes: [ClaudeProcess] = []
     @AppStorage("notificationsEnabled") private var notificationsEnabled = false
 
-    private let processTimer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
+    private let processTimer = Timer.publish(every: 15, on: .main, in: .common).autoconnect()
     private let processMonitor = ProcessMonitor()
 
     public var body: some View {
