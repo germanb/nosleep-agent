@@ -1,120 +1,102 @@
-# NoSleepAgent
+# NoSleepAgent ☕
 
-A macOS menu bar app that prevents your Mac from sleeping during Claude Code agent operations.
+Keep your Mac awake while Claude Code works. No more interrupted AI sessions due to sleep mode.
 
-## Features
+## What It Does
 
-- **Automatic Sleep Prevention**: Monitors Claude Code agent activity and prevents Mac sleep while tasks are running
-- **Session Tracking**: Displays current project name, task prompt, and working duration
-- **Completion Notifications**: Get notified when long-running tasks (≥5 minutes) complete
-- **Launch at Login**: Optional auto-start when you log in
-- **Multiple Icon Styles**: Choose from coffee cup, sparkles, CPU, gears, or simple dot icons
+When you're using Claude Code, NoSleepAgent:
+- ✅ Prevents your Mac from sleeping during active tasks
+- ✅ Shows what Claude is working on in your menu bar
+- ✅ Notifies you when long tasks complete (optional)
+- ✅ Automatically allows sleep when Claude is idle
+
+## Quick Start
+
+### 1. Install with Claude Code
+
+Just say to Claude:
+```
+Install https://github.com/germanb/nosleep-agent
+```
+
+Claude will:
+- Clone and build the app
+- Set up the hooks automatically
+- Launch the menu bar app
+
+### 2. That's it!
+
+Look for the coffee cup icon ☕ in your menu bar. When Claude starts working, it'll keep your Mac awake.
+
+## Settings
+
+Click the menu bar icon to:
+- **Launch at Login** - Auto-start when you log in
+- **Enable Notifications** - Get alerts when tasks ≥5 minutes complete
+- See current task info (project, prompt, duration)
+
+## Manual Installation (if needed)
+
+If Claude Code doesn't install it automatically:
+
+```bash
+# Clone and build
+git clone https://github.com/germanb/nosleep-agent.git
+cd nosleep-agent
+swift build -c release
+
+# Add hooks to ~/.claude/settings.json
+{
+  "hooks": {
+    "agent-start": "~/nosleep-agent/hooks/prevent-sleep.sh",
+    "agent-stop": "~/nosleep-agent/hooks/allow-sleep.sh"
+  }
+}
+
+# Run the app
+open .build/release/NoSleepAgent
+```
 
 ## How It Works
 
-NoSleepAgent integrates with Claude Code via hooks:
-1. When Claude Code starts a task, the `prevent-sleep.sh` hook runs `caffeinate` to prevent sleep
-2. The menu bar app monitors the caffeinate process and displays task info
-3. When the task completes, `allow-sleep.sh` stops caffeinate and sends a notification (if enabled)
+Simple: when Claude Code starts a task, the hooks run `caffeinate` to prevent sleep. When the task finishes, sleep is allowed again. The menu bar app monitors this and shows you what's happening.
 
-## Installation
+## Troubleshooting
 
-### Prerequisites
+**Menu bar icon not showing?**
+- Make sure the app is running (check Activity Monitor)
+- Try rebuilding: `swift build -c release`
+
+**Mac still sleeping?**
+- Check that hooks are configured in `~/.claude/settings.json`
+- Verify the hook scripts have execute permissions: `chmod +x hooks/*.sh`
+
+**Not seeing task info?**
+- Task info comes from Claude session files (`~/.claude/projects/`)
+- May take a few seconds to appear after starting a task
+
+## Requirements
+
 - macOS 14.0 or later
-- Swift 5.9+
 - Claude Code CLI
 
-### Build from Source
+## Icon Styles
 
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/nosleep-agent.git
-cd nosleep-agent
-
-# Build the app
-swift build -c release
-
-# Or build with Xcode
-open Package.swift
-```
-
-### Setup Claude Code Hooks
-
-Add these hooks to your `~/.claude/settings.json`:
-
-```json
-{
-  "hooks": {
-    "agent-start": "~/path/to/nosleep-agent/hooks/prevent-sleep.sh",
-    "agent-stop": "~/path/to/nosleep-agent/hooks/allow-sleep.sh"
-  }
-}
-```
-
-## Usage
-
-1. Launch NoSleepAgent (it appears in your menu bar)
-2. Use Claude Code normally
-3. The app automatically:
-   - Prevents sleep when Claude is working
-   - Shows task info in the menu
-   - Sends notifications when tasks complete (if enabled)
-
-## Configuration
-
-- **Launch at Login**: Toggle in the menu to auto-start
-- **Enable Notifications**: Toggle to receive task completion alerts
-- **Icon Style**: Choose your preferred icon from 5 styles (configure in code)
-
-## Development
-
-### Run Tests
-
-```bash
-swift test
-```
-
-### Project Structure
-
-```
-NoSleepAgent/
-├── Models/
-│   └── ClaudeStatus.swift      # Task and status data models
-├── Services/
-│   ├── StatusMonitor.swift     # File watching and state management
-│   ├── SessionParser.swift     # Parse Claude session files
-│   └── NotificationManager.swift # macOS notifications
-├── Views/
-│   ├── MenuContent.swift       # Menu bar UI
-│   └── StatusIcon.swift        # Icon rendering
-└── NoSleepAgentApp.swift       # App entry point
-
-hooks/
-├── prevent-sleep.sh            # Start caffeinate
-└── allow-sleep.sh              # Stop caffeinate
-
-Tests/
-├── ClaudeStatusTests.swift
-├── SessionParserTests.swift
-└── NotificationManagerTests.swift
-```
-
-## Technical Details
-
-- Built with SwiftUI and Swift 5.9
-- Uses `caffeinate` to prevent system sleep
-- Monitors PID files in `/tmp` for agent status
-- Parses Claude session files from `~/.claude/projects/`
-- Sends passive notifications via UserNotifications framework
-
-## License
-
-MIT License - see LICENSE file for details
+The app defaults to a coffee cup icon. You can change it by modifying `NoSleepAgentApp.swift`:
+- ☕ Coffee Cup (default)
+- ✨ Sparkles AI
+- 💻 CPU Agent
+- ⚙️ Dual Gears
+- ⚫ Simple Dot
 
 ## Contributing
 
-Contributions welcome! Please open an issue or PR.
+Issues and PRs welcome! This is a simple tool to make Claude Code usage better.
 
-## Acknowledgments
+## License
 
-Built for use with [Claude Code](https://claude.com/claude-code) by Anthropic.
+MIT - Use it however you want.
+
+---
+
+**Made for [Claude Code](https://claude.com/claude-code)** 🤖
