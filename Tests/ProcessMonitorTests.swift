@@ -5,21 +5,21 @@ import Foundation
 @Suite("ProcessMonitor Tests")
 struct ProcessMonitorTests {
 
-    // MARK: - ClaudeProcess Tests
+    // MARK: - ProcessInfo Tests
 
-    @Test("ClaudeProcess equality")
-    func testClaudeProcessEquality() {
-        let proc1 = ClaudeProcess(pid: 12345, cpuPercent: 78.5)
-        let proc2 = ClaudeProcess(pid: 12345, cpuPercent: 78.5)
-        let proc3 = ClaudeProcess(pid: 54321, cpuPercent: 78.5)
+    @Test("ProcessInfo equality")
+    func testProcessInfoEquality() {
+        let proc1 = ProcessInfo(pid: 12345, cpuPercent: 78.5)
+        let proc2 = ProcessInfo(pid: 12345, cpuPercent: 78.5)
+        let proc3 = ProcessInfo(pid: 54321, cpuPercent: 78.5)
 
         #expect(proc1 == proc2)
         #expect(proc1 != proc3)
     }
 
-    @Test("ClaudeProcess id property")
-    func testClaudeProcessId() {
-        let process = ClaudeProcess(pid: 12345, cpuPercent: 78.5)
+    @Test("ProcessInfo id property")
+    func testProcessInfoId() {
+        let process = ProcessInfo(pid: 12345, cpuPercent: 78.5)
         #expect(process.id == 12345)
     }
 
@@ -32,19 +32,19 @@ struct ProcessMonitorTests {
     }
 
     @Test("Get claude processes returns array")
-    func testGetClaudeProcesses() async {
+    func testGetClaudeProcesses() {
         let monitor = ProcessMonitor()
-        let processes = await monitor.getClaudeProcesses()
+        let processes = monitor.getClaudeProcesses()
 
         // Should return an array (may be empty if no claude processes running)
-        #expect(processes is [ClaudeProcess])
+        #expect(processes is [ProcessInfo])
     }
 
     @Test("Kill non-existent process returns false")
-    func testKillNonExistentProcess() async {
+    func testKillNonExistentProcess() {
         let monitor = ProcessMonitor()
         // Use an invalid PID (999999 is unlikely to exist)
-        let result = await monitor.killProcess(pid: 999999)
+        let result = monitor.killProcess(pid: 999999)
 
         // Should return false for non-existent process
         #expect(!result)

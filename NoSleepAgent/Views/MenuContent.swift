@@ -11,7 +11,7 @@ public struct MenuContent: View {
     }
     @State private var currentTime = Date()
     @State private var launchAtLogin = false
-    @State private var claudeProcesses: [ClaudeProcess] = []
+    @State private var claudeProcesses: [ProcessInfo] = []
     @AppStorage("notificationsEnabled") private var notificationsEnabled = false
 
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -95,9 +95,7 @@ public struct MenuContent: View {
         }
         .onAppear {
             checkLaunchAtLoginStatus()
-            Task {
-                await refreshProcesses()
-            }
+            refreshProcesses()
         }
     }
 
@@ -121,15 +119,15 @@ public struct MenuContent: View {
         }
     }
 
-    private func refreshProcesses() async {
-        claudeProcesses = await processMonitor.getClaudeProcesses()
+    private func refreshProcesses() {
+        claudeProcesses = processMonitor.getClaudeProcesses()
     }
 
     private func killProcess(pid: Int32) {
-        Task {
-            _ = await processMonitor.killProcess(pid: pid)
-            // Refresh the process list after kill completes
-            await refreshProcesses()
+        _ = processMonitor.killProcess(pid: pid)
+        // Refresh the process list after a short delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            refreshProcesses()
         }
     }
 }
