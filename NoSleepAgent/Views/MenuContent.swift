@@ -22,6 +22,7 @@ public struct MenuContent: View {
             if !processes.isEmpty {
                 ProcessesSectionView(
                     processes: processes,
+                    activeProject: monitor.status.isWorking ? monitor.status.task?.project : nil,
                     onKillProcess: { pid in
                         _ = processMonitor.killProcess(pid)
                         Task {
@@ -122,6 +123,7 @@ struct MenuDivider: View {
 /// Processes section with native macOS list style
 struct ProcessesSectionView: View {
     let processes: [ClaudeProcess]
+    let activeProject: String?
     let onKillProcess: (Int32) -> Void
 
     var body: some View {
@@ -139,6 +141,7 @@ struct ProcessesSectionView: View {
             ForEach(processes) { process in
                 ProcessRowView(
                     process: process,
+                    isActive: activeProject != nil && !process.project.isEmpty && process.project == activeProject,
                     onKill: {
                         onKillProcess(process.pid)
                     }
@@ -151,14 +154,15 @@ struct ProcessesSectionView: View {
 /// Native macOS menu item with status dot and hover effect
 struct ProcessRowView: View {
     let process: ClaudeProcess
+    let isActive: Bool
     let onKill: () -> Void
     @State private var isHovering = false
 
     var body: some View {
         HStack(spacing: 8) {
-            // Status indicator dot - green for active process
+            // Status indicator dot - green when preventing sleep, gray when idle
             Circle()
-                .fill(Color.green)
+                .fill(isActive ? Color.green : Color.secondary.opacity(0.5))
                 .frame(width: 6, height: 6)
 
             Text(process.project.isEmpty ? "claude-\(process.pid)" : process.project)
