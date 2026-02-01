@@ -36,5 +36,11 @@ public struct StatusIcon: View {
             .foregroundStyle(status.isWorking ? .green : .secondary)
             .imageScale(.large)
             .font(.system(size: 18, weight: .regular))
+            .contextMenu {
+                Button("Quit NoSleep Agent") {
+                    NSApp.terminate(nil)
+                }
+                .keyboardShortcut("q")
+            }
     }
 }
