@@ -7,216 +7,175 @@ struct SessionParserTests {
 
     // MARK: - Helper Methods
 
-    func createTempDirectory() throws -> (tempDir: URL, projectsPath: URL) {
-        let tempDirectory = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString)
-
-        let projectsPath = tempDirectory.appendingPathComponent(".claude/projects")
+    func createTempProjectsDir() throws -> URL {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("session-parser-tests-\(UUID().uuidString)")
+            .appendingPathComponent(".claude")
+            .appendingPathComponent("projects")
 
         try FileManager.default.createDirectory(
-            at: projectsPath,
+            at: tempDir,
             withIntermediateDirectories: true
         )
 
-        return (tempDirectory, projectsPath)
+        return tempDir
     }
 
-    func cleanup(tempDir: URL) {
-        try? FileManager.default.removeItem(at: tempDir)
+    func cleanup(_ url: URL) {
+        // Go up to the test root (3 levels: projects -> .claude -> test-uuid)
+        let testRoot = url.deletingLastPathComponent().deletingLastPathComponent()
+        try? FileManager.default.removeItem(at: testRoot)
     }
 
-    func makeJSONLine(type: String, content: Any, cwd: String? = nil, slug: String? = nil) -> String {
-        var json: [String: Any] = ["type": type]
+    func writeSessionFile(at projectsDir: URL, projectName: String, fileName: String, content: String) throws -> URL {
+        let projectDir = projectsDir.appendingPathComponent(projectName)
+        try FileManager.default.createDirectory(at: projectDir, withIntermediateDirectories: true)
 
-        if type == "user" {
-            json["message"] = ["content": content]
-        }
+        let filePath = projectDir.appendingPathComponent(fileName)
+        try content.write(to: filePath, atomically: true, encoding: .utf8)
 
-        if let cwd = cwd {
-            json["cwd"] = cwd
-        }
+        return filePath
+    }
 
-        if let slug = slug {
-            json["slug"] = slug
-        }
-
-        guard let data = try? JSONSerialization.data(withJSONObject: json),
-              let string = String(data: data, encoding: .utf8) else {
-            return ""
-        }
-
-        return string
+    func makeUserMessageJSON(prompt: String, cwd: String, slug: String) -> String {
+        """
+        {"type":"user","message":{"content":"\(prompt)"},"cwd":"\(cwd)","slug":"\(slug)"}
+        """
     }
 
     // MARK: - Tests
 
-    @Test("Find active session with no files")
-    func testFindActiveSession_noFiles() {
-        let parser = SessionParser()
+    @Test("Returns nil when projects directory is empty")
+    func testEmptyProjectsDir() throws {
+        let projectsDir = try createTempProjectsDir()
+        defer { cleanup(projectsDir) }
+
+        let parser = SessionParser(projectsPath: projectsDir.path)
         let result = parser.findActiveSession()
 
-        // Note: This test may find actual sessions if Claude Code is running
-        // The test passes either way - it documents the behavior
-        // In a real test environment with no ~/.claude/projects, result would be nil
-        #expect(result == nil || result != nil)
+        #expect(result == nil)
     }
 
-    @Test("Parse simple string content")
-    func testParseSimpleStringContent() throws {
-        let content = makeJSONLine(
-            type: "user",
-            content: "Add tests to the project",
-            cwd: "/Users/test/myproject",
-            slug: "abc123"
-        )
+    @Test("Returns nil when no recent files exist")
+    func testNoRecentFiles() throws {
+        let projectsDir = try createTempProjectsDir()
+        defer { cleanup(projectsDir) }
 
-        let lines = content.components(separatedBy: "\n")
-        #expect(lines.count == 1)
+        let content = makeUserMessageJSON(prompt: "Test", cwd: "/test/proj", slug: "s1")
+        let filePath = try writeSessionFile(at: projectsDir, projectName: "proj", fileName: "session.jsonl", content: content)
 
-        let jsonData = lines[0].data(using: .utf8)!
-        let json = try JSONSerialization.jsonObject(with: jsonData) as! [String: Any]
+        // Set modification date to 1 minute ago (older than 30s threshold)
+        let oldDate = Date().addingTimeInterval(-60)
+        try FileManager.default.setAttributes([.modificationDate: oldDate], ofItemAtPath: filePath.path)
 
-        #expect(json["type"] as? String == "user")
-        let message = json["message"] as! [String: Any]
-        #expect(message["content"] as? String == "Add tests to the project")
+        let parser = SessionParser(projectsPath: projectsDir.path)
+        let result = parser.findActiveSession()
+
+        #expect(result == nil)
     }
 
-    @Test("Parse array content")
-    func testParseArrayContent() throws {
-        let contentArray: [[String: Any]] = [
-            ["type": "text", "text": "Create a new feature"]
-        ]
+    @Test("Finds active session from recent file")
+    func testFindsActiveSession() throws {
+        let projectsDir = try createTempProjectsDir()
+        defer { cleanup(projectsDir) }
 
-        let content = makeJSONLine(
-            type: "user",
-            content: contentArray,
-            cwd: "/Users/test/feature-project",
-            slug: "xyz789"
-        )
+        let content = makeUserMessageJSON(prompt: "Add tests to project", cwd: "/Users/dev/myapp", slug: "abc123")
+        _ = try writeSessionFile(at: projectsDir, projectName: "myapp-encoded", fileName: "session.jsonl", content: content)
 
-        let jsonData = content.data(using: .utf8)!
-        let json = try JSONSerialization.jsonObject(with: jsonData) as! [String: Any]
+        let parser = SessionParser(projectsPath: projectsDir.path)
+        let result = parser.findActiveSession()
 
-        #expect(json["type"] as? String == "user")
-        let message = json["message"] as! [String: Any]
-        let parsedContent = message["content"] as! [[String: Any]]
-
-        #expect(parsedContent[0]["type"] as? String == "text")
-        #expect(parsedContent[0]["text"] as? String == "Create a new feature")
+        #expect(result != nil)
+        #expect(result?.prompt == "Add tests to project")
+        #expect(result?.project == "myapp")
+        #expect(result?.sessionSlug == "abc123")
     }
 
-    @Test("Multiple user messages takes latest")
-    func testMultipleUserMessages_takesLatest() throws {
+    @Test("Extracts latest user message from multiple messages")
+    func testLatestUserMessage() throws {
+        let projectsDir = try createTempProjectsDir()
+        defer { cleanup(projectsDir) }
+
         let content = """
-        \(makeJSONLine(type: "user", content: "First message", cwd: "/Users/test/proj", slug: "s1"))
-        \(makeJSONLine(type: "assistant", content: "Response", cwd: "/Users/test/proj", slug: "s1"))
-        \(makeJSONLine(type: "user", content: "Second message", cwd: "/Users/test/proj", slug: "s1"))
+        {"type":"user","message":{"content":"First message"},"cwd":"/test/proj","slug":"s1"}
+        {"type":"assistant","message":{"content":"Response"}}
+        {"type":"user","message":{"content":"Second message"},"cwd":"/test/proj","slug":"s1"}
         """
+        _ = try writeSessionFile(at: projectsDir, projectName: "proj", fileName: "session.jsonl", content: content)
 
-        let lines = content.components(separatedBy: "\n").filter { !$0.isEmpty }
-        #expect(lines.count == 3)
+        let parser = SessionParser(projectsPath: projectsDir.path)
+        let result = parser.findActiveSession()
 
-        // Verify the last user message is parseable
-        let lastUserLine = lines[2]
-        let jsonData = lastUserLine.data(using: .utf8)!
-        let json = try JSONSerialization.jsonObject(with: jsonData) as! [String: Any]
-        let message = json["message"] as! [String: Any]
-
-        #expect(message["content"] as? String == "Second message")
+        #expect(result?.prompt == "Second message")
     }
 
-    @Test("Skips interrupts")
+    @Test("Skips interrupt messages")
     func testSkipsInterrupts() throws {
+        let projectsDir = try createTempProjectsDir()
+        defer { cleanup(projectsDir) }
+
         let content = """
-        \(makeJSONLine(type: "user", content: "[interrupt]", cwd: "/Users/test/proj", slug: "s1"))
-        \(makeJSONLine(type: "user", content: "Real message", cwd: "/Users/test/proj", slug: "s1"))
+        {"type":"user","message":{"content":"Real prompt"},"cwd":"/test/proj","slug":"s1"}
+        {"type":"user","message":{"content":"[interrupt]"},"cwd":"/test/proj","slug":"s1"}
         """
+        _ = try writeSessionFile(at: projectsDir, projectName: "proj", fileName: "session.jsonl", content: content)
 
-        let lines = content.components(separatedBy: "\n").filter { !$0.isEmpty }
-        #expect(lines.count == 2)
+        let parser = SessionParser(projectsPath: projectsDir.path)
+        let result = parser.findActiveSession()
 
-        for (index, line) in lines.enumerated() {
-            let jsonData = line.data(using: .utf8)!
-            let json = try JSONSerialization.jsonObject(with: jsonData) as! [String: Any]
-            let message = json["message"] as! [String: Any]
-            let text = message["content"] as! String
-
-            if index == 0 {
-                #expect(text.hasPrefix("["))
-            } else {
-                #expect(!text.hasPrefix("["))
-            }
-        }
+        #expect(result?.prompt == "Real prompt")
     }
 
-    @Test("Extracts project from cwd")
-    func testExtractsProjectFromCwd() throws {
-        let content = makeJSONLine(
-            type: "user",
-            content: "Test",
-            cwd: "/Users/developer/Projects/my-awesome-app",
-            slug: "test123"
-        )
+    @Test("Handles array content format")
+    func testArrayContent() throws {
+        let projectsDir = try createTempProjectsDir()
+        defer { cleanup(projectsDir) }
 
-        let jsonData = content.data(using: .utf8)!
-        let json = try JSONSerialization.jsonObject(with: jsonData) as! [String: Any]
+        let content = """
+        {"type":"user","message":{"content":[{"type":"text","text":"Array prompt"}]},"cwd":"/test/proj","slug":"s1"}
+        """
+        _ = try writeSessionFile(at: projectsDir, projectName: "proj", fileName: "session.jsonl", content: content)
 
-        #expect(json["cwd"] as? String == "/Users/developer/Projects/my-awesome-app")
+        let parser = SessionParser(projectsPath: projectsDir.path)
+        let result = parser.findActiveSession()
 
-        let cwd = json["cwd"] as! String
-        let projectName = URL(fileURLWithPath: cwd).lastPathComponent
-        #expect(projectName == "my-awesome-app")
+        #expect(result?.prompt == "Array prompt")
     }
 
-    @Test("Extracts session slug")
-    func testExtractsSessionSlug() throws {
-        let content = makeJSONLine(
-            type: "user",
-            content: "Test",
-            cwd: "/Users/test/proj",
-            slug: "unique-slug-123"
-        )
+    @Test("Returns nil for malformed JSON")
+    func testMalformedJSON() throws {
+        let projectsDir = try createTempProjectsDir()
+        defer { cleanup(projectsDir) }
 
-        let jsonData = content.data(using: .utf8)!
-        let json = try JSONSerialization.jsonObject(with: jsonData) as! [String: Any]
+        _ = try writeSessionFile(at: projectsDir, projectName: "proj", fileName: "session.jsonl", content: "{invalid json")
 
-        #expect(json["slug"] as? String == "unique-slug-123")
+        let parser = SessionParser(projectsPath: projectsDir.path)
+        let result = parser.findActiveSession()
+
+        #expect(result == nil)
     }
 
-    @Test("Empty content")
-    func testEmptyContent() throws {
-        let content = makeJSONLine(type: "user", content: "", cwd: "/test", slug: "s1")
+    @Test("Selects most recently modified file across projects")
+    func testSelectsMostRecentFile() throws {
+        let projectsDir = try createTempProjectsDir()
+        defer { cleanup(projectsDir) }
 
-        let jsonData = content.data(using: .utf8)!
-        let json = try JSONSerialization.jsonObject(with: jsonData) as! [String: Any]
-        let message = json["message"] as! [String: Any]
+        // Create older file
+        let oldContent = makeUserMessageJSON(prompt: "Old prompt", cwd: "/test/old", slug: "old")
+        let oldFile = try writeSessionFile(at: projectsDir, projectName: "old-proj", fileName: "old.jsonl", content: oldContent)
 
-        #expect(message["content"] as? String == "")
-    }
+        // Set old file to 20 seconds ago (still within 30s but older)
+        let oldDate = Date().addingTimeInterval(-20)
+        try FileManager.default.setAttributes([.modificationDate: oldDate], ofItemAtPath: oldFile.path)
 
-    @Test("Malformed JSON")
-    func testMalformedJSON() {
-        let malformed = "{invalid json"
+        // Create newer file (just now)
+        let newContent = makeUserMessageJSON(prompt: "New prompt", cwd: "/test/new", slug: "new")
+        _ = try writeSessionFile(at: projectsDir, projectName: "new-proj", fileName: "new.jsonl", content: newContent)
 
-        guard let data = malformed.data(using: .utf8) else {
-            Issue.record("Failed to create data")
-            return
-        }
+        let parser = SessionParser(projectsPath: projectsDir.path)
+        let result = parser.findActiveSession()
 
-        let json = try? JSONSerialization.jsonObject(with: data)
-        #expect(json == nil, "Malformed JSON should fail to parse")
-    }
-
-    @Test("TaskInfo creation")
-    func testTaskInfoCreation() {
-        let task = TaskInfo(
-            prompt: "Add comprehensive tests",
-            project: "nosleep-agent",
-            sessionSlug: "test-session-123"
-        )
-
-        #expect(task.prompt == "Add comprehensive tests")
-        #expect(task.project == "nosleep-agent")
-        #expect(task.sessionSlug == "test-session-123")
+        #expect(result?.prompt == "New prompt")
+        #expect(result?.project == "new")
     }
 }

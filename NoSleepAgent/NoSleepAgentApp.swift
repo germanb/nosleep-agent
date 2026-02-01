@@ -27,6 +27,6 @@ struct NoSleepAgentApp: App {
         } label: {
             StatusIcon(status: monitor.status, style: .coffee)
         }
-        .menuBarExtraStyle(.menu)
+        .menuBarExtraStyle(.window)
     }
 }

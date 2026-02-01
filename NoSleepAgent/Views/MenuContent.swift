@@ -11,9 +11,12 @@ public struct MenuContent: View {
     }
     @State private var currentTime = Date()
     @State private var launchAtLogin = false
+    @State private var processes: [ClaudeProcess] = []
     @AppStorage("notificationsEnabled") private var notificationsEnabled = false
 
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    private let processTimer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
+    private let processMonitor = ProcessMonitor()
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -58,6 +61,27 @@ public struct MenuContent: View {
 
             Divider()
 
+            // Claude Processes Section
+            if processes.isEmpty {
+                Text("No Claude Processes")
+            } else {
+                Menu("Claude Processes (\(processes.count))") {
+                    ForEach(processes) { process in
+                        let label = process.project.isEmpty
+                            ? "PID \(process.pid)"
+                            : process.project
+                        Button("Kill \(label) (\(String(format: "%.1f", process.cpuPercent))%)") {
+                            _ = processMonitor.killProcess(process.pid)
+                            Task {
+                                processes = await processMonitor.fetchProcesses()
+                            }
+                        }
+                    }
+                }
+            }
+
+            Divider()
+
             Button("Quit") {
                 NSApp.terminate(nil)
             }
@@ -66,9 +90,17 @@ public struct MenuContent: View {
         .onReceive(timer) { _ in
             currentTime = Date()
         }
-        .onAppear {
-            checkLaunchAtLoginStatus()
+        .onReceive(processTimer) { _ in
+            Task {
+                processes = await processMonitor.fetchProcesses()
+            }
         }
+        .task {
+            checkLaunchAtLoginStatus()
+            processes = await processMonitor.fetchProcesses()
+        }
+        .frame(width: 280)
+        .padding()
     }
 
     private func checkLaunchAtLoginStatus() {

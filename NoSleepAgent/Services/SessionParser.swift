@@ -8,6 +8,11 @@ public struct SessionParser {
         self.projectsPath = "\(home)/.claude/projects"
     }
 
+    /// Testable initializer with custom projects path
+    public init(projectsPath: String) {
+        self.projectsPath = projectsPath
+    }
+
     public func findActiveSession() -> TaskInfo? {
         let fileManager = FileManager.default
 
