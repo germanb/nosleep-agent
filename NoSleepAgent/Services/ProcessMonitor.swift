@@ -62,22 +62,34 @@ public final class ProcessMonitor {
 
     /// Filter out Claude Desktop app and helper processes
     private func filterClaudeProcesses(_ pids: [Int32]) async -> [Int32] {
+        guard !pids.isEmpty else { return [] }
+
+        // Batch fetch all command lines in a single ps call
+        let pidList = pids.map(String.init).joined(separator: ",")
+        let output = await runCommand("/bin/ps", args: ["-p", pidList, "-o", "pid=,command="])
+
         var validPIDs: [Int32] = []
 
-        for pid in pids {
-            // Get command line for this PID
-            let cmd = await runCommand("/bin/ps", args: ["-p", "\(pid)", "-o", "command="])
-            let lowerCmd = cmd.lowercased()
+        for line in output.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else { continue }
+
+            // Parse "PID COMMAND" format - PID is first whitespace-separated token
+            let components = trimmed.split(separator: " ", maxSplits: 1)
+            guard components.count >= 2,
+                  let pid = Int32(components[0]) else { continue }
+
+            let cmd = String(components[1]).lowercased()
 
             // Exclude Claude Desktop app and all its helpers
-            if lowerCmd.contains("/applications/claude.app") ||
-               lowerCmd.contains("claude helper") ||
-               lowerCmd.contains("chrome-native-host") {
+            if cmd.contains("/applications/claude.app") ||
+               cmd.contains("claude helper") ||
+               cmd.contains("chrome-native-host") {
                 continue
             }
 
             // Only include actual Claude CLI processes
-            if lowerCmd.contains("claude") {
+            if cmd.contains("claude") {
                 validPIDs.append(pid)
             }
         }

@@ -224,7 +224,6 @@ struct MinimalButtonItem: View {
     let title: String
     let shortcut: String?
     let action: () -> Void
-    @State private var isHovering = false
 
     init(title: String, shortcut: String? = nil, action: @escaping () -> Void) {
         self.title = title
@@ -252,53 +251,5 @@ struct MinimalButtonItem: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-    }
-}
-
-/// Native macOS menu item button
-struct MenuItemButton: View {
-    let title: String
-    let icon: String?
-    let destructive: Bool
-    let shortcut: String?
-    let action: () -> Void
-    @State private var isHovering = false
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                if let icon = icon {
-                    Image(systemName: icon)
-                        .font(.system(size: 12))
-                        .foregroundStyle(destructive ? .red : .secondary)
-                        .frame(width: 16)
-                }
-
-                Text(title)
-                    .font(.system(size: 13))
-                    .foregroundStyle(destructive ? .red : .primary)
-
-                Spacer()
-
-                if let shortcut = shortcut {
-                    Text("⌘\(shortcut)")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.tertiary)
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 5)
-            .background(
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(isHovering ? (destructive ? Color.red.opacity(0.12) : Color.accentColor.opacity(0.08)) : Color.clear)
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering in
-            isHovering = hovering
-        }
-        .animation(.easeOut(duration: 0.12), value: isHovering)
-        .padding(.horizontal, 4)
     }
 }
