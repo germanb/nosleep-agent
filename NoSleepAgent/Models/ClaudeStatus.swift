@@ -44,14 +44,7 @@ public enum ClaudeStatus: Equatable {
         case .idle:
             return "Idle"
         case .working:
-            guard let duration = duration else { return "Working" }
-            let minutes = Int(duration) / 60
-            let seconds = Int(duration) % 60
-            if minutes > 0 {
-                return "Working (\(minutes)m \(seconds)s)"
-            } else {
-                return "Working (\(seconds)s)"
-            }
+            return "Working"
         }
     }
 }

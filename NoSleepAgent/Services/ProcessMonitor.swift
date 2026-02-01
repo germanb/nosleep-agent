@@ -11,25 +11,16 @@ public final class ProcessMonitor {
     }
 
     public func fetchProcesses() async -> [ClaudeProcess] {
-        logger.debug("Starting process fetch")
-        let output = await runPS()
-        logger.debug("ps aux returned \(output.count) bytes")
-        var processes = parseProcesses(from: output)
+        // Get Claude process PIDs using pgrep (much faster than ps aux)
+        let pids = await getClaudeProcessPIDs()
 
-        // Enrich with project names from working directories
-        for i in processes.indices {
-            logger.debug("Enriching PID \(processes[i].pid) with project info")
-            if let project = await getProjectName(for: processes[i].pid) {
-                processes[i] = ClaudeProcess(
-                    pid: processes[i].pid,
-                    cpuPercent: processes[i].cpuPercent,
-                    project: project
-                )
-            }
+        // Batch fetch all project names in a single lsof call
+        let projectNames = await getProjectNames(for: pids)
+
+        // Build process list
+        return pids.map { pid in
+            ClaudeProcess(pid: pid, project: projectNames[pid] ?? "")
         }
-
-        logger.debug("Detected \(processes.count) Claude Code processes")
-        return processes
     }
 
     public func killProcess(_ pid: Int32) -> Bool {
@@ -54,74 +45,83 @@ public final class ProcessMonitor {
 
     // MARK: - Internal (exposed for testing)
 
-    func parseProcesses(from output: String) -> [ClaudeProcess] {
-        var processes: [ClaudeProcess] = []
+    /// Get Claude process PIDs using pgrep - much faster than ps aux
+    private func getClaudeProcessPIDs() async -> [Int32] {
+        // Use pgrep to find claude processes
+        // -i: case insensitive
+        // -f: match full command line (to catch node processes running claude)
+        let output = await runCommand("/usr/bin/pgrep", args: ["-if", "claude"])
 
-        let lines = output.components(separatedBy: .newlines)
-        logger.debug("Parsing ps output, found \(lines.count) total lines")
+        let pids = output.components(separatedBy: .newlines)
+            .compactMap { Int32($0.trimmingCharacters(in: .whitespaces)) }
+            .filter { $0 != selfPID }
 
-        for line in lines {
-            // Only match lines containing "claude" (case-insensitive)
-            guard line.lowercased().contains("claude") else { continue }
-
-            logger.debug("Found claude process: \(line)")
-
-            // Exclude Claude Desktop app and all its helpers
-            let lowerLine = line.lowercased()
-            if lowerLine.contains("/applications/claude.app") ||
-               lowerLine.contains("claude helper") ||
-               lowerLine.contains("chrome-native-host") {
-                logger.debug("Excluding desktop app/helper: \(line)")
-                continue
-            }
-
-            let columns = line.split(whereSeparator: { $0.isWhitespace })
-            // ps aux format: USER PID %CPU %MEM VSZ RSS TTY STAT START TIME COMMAND
-            // Index:         0    1   2    3    4   5   6   7    8     9    10+
-            guard columns.count >= 11,
-                  let pid = Int32(columns[1]),
-                  let cpu = Double(columns[2]) else {
-                continue
-            }
-
-            // Extract the command (column 10+)
-            let command = columns[10...].joined(separator: " ")
-
-            // Get the executable name (last component of path or first word)
-            let executablePath = String(columns[10])
-            let executable = executablePath.split(separator: "/").last.map(String.init) ?? executablePath
-
-            // Only match actual Claude CLI processes:
-            // 1. Executable is "claude" (e.g., "claude --dangerously-skip-permissions")
-            // 2. Executable is "node" with "claude" in args (e.g., "node /path/to/claude-code")
-            // Exclude shell wrappers (zsh, bash, find, etc.) even if they have "claude" in paths
-            let isClaudeExecutable = executable.lowercased() == "claude"
-            let isNodeWithClaude = executable.lowercased() == "node" && command.lowercased().contains("claude")
-
-            guard isClaudeExecutable || isNodeWithClaude else {
-                logger.debug("Excluding non-Claude executable: \(command)")
-                continue
-            }
-
-            // Exclude self
-            if pid == selfPID { continue }
-
-            processes.append(ClaudeProcess(pid: pid, cpuPercent: cpu))
-        }
-
-        return processes
+        // Filter out Claude Desktop app and helpers
+        return await filterClaudeProcesses(pids)
     }
 
-    private func getProjectName(for pid: Int32) async -> String? {
-        let cwd = await runCommand("/usr/sbin/lsof", args: ["-a", "-p", "\(pid)", "-d", "cwd", "-Fn"])
-        // lsof output format: p<pid>\nn<path>
-        let lines = cwd.components(separatedBy: .newlines)
-        for line in lines where line.hasPrefix("n") {
-            let path = String(line.dropFirst()) // Remove 'n' prefix
-            // Extract last component as project name
-            return URL(fileURLWithPath: path).lastPathComponent
+    /// Filter out Claude Desktop app and helper processes
+    private func filterClaudeProcesses(_ pids: [Int32]) async -> [Int32] {
+        guard !pids.isEmpty else { return [] }
+
+        // Batch fetch all command lines in a single ps call
+        let pidList = pids.map(String.init).joined(separator: ",")
+        let output = await runCommand("/bin/ps", args: ["-p", pidList, "-o", "pid=,command="])
+
+        var validPIDs: [Int32] = []
+
+        for line in output.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else { continue }
+
+            // Parse "PID COMMAND" format - PID is first whitespace-separated token
+            let components = trimmed.split(separator: " ", maxSplits: 1)
+            guard components.count >= 2,
+                  let pid = Int32(components[0]) else { continue }
+
+            let cmd = String(components[1]).lowercased()
+
+            // Exclude Claude Desktop app and all its helpers
+            if cmd.contains("/applications/claude.app") ||
+               cmd.contains("claude helper") ||
+               cmd.contains("chrome-native-host") {
+                continue
+            }
+
+            // Only include actual Claude CLI processes
+            if cmd.contains("claude") {
+                validPIDs.append(pid)
+            }
         }
-        return nil
+
+        return validPIDs
+    }
+
+    /// Batch fetch project names for multiple PIDs in a single lsof call
+    private func getProjectNames(for pids: [Int32]) async -> [Int32: String] {
+        guard !pids.isEmpty else { return [:] }
+
+        // Build comma-separated PID list for lsof
+        let pidList = pids.map(String.init).joined(separator: ",")
+
+        // Single lsof call for all processes
+        let output = await runCommand("/usr/sbin/lsof", args: ["-a", "-p", pidList, "-d", "cwd", "-Fn"])
+
+        // Parse output: p<pid>\nn<path>\np<pid2>\nn<path2>...
+        var projectNames: [Int32: String] = [:]
+        var currentPID: Int32?
+
+        for line in output.components(separatedBy: .newlines) {
+            if line.hasPrefix("p") {
+                currentPID = Int32(line.dropFirst())
+            } else if line.hasPrefix("n"), let pid = currentPID {
+                let path = String(line.dropFirst())
+                let projectName = URL(fileURLWithPath: path).lastPathComponent
+                projectNames[pid] = projectName
+            }
+        }
+
+        return projectNames
     }
 
     private func runCommand(_ executable: String, args: [String]) async -> String {
@@ -146,7 +146,4 @@ public final class ProcessMonitor {
         }
     }
 
-    private func runPS() async -> String {
-        await runCommand("/bin/ps", args: ["aux"])
-    }
 }

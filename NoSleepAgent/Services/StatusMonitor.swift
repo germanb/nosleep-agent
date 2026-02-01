@@ -75,13 +75,29 @@ public final class StatusMonitor {
         let fileManager = FileManager.default
 
         guard fileManager.fileExists(atPath: pidFilePath),
-              let pidString = try? String(contentsOfFile: pidFilePath, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines),
-              let pid = Int32(pidString) else {
+              let content = try? String(contentsOfFile: pidFilePath, encoding: .utf8) else {
             transitionToIdle()
             return
         }
 
-        let isAlive = kill(pid, 0) == 0
+        // Parse PID file (supports both new and old formats)
+        let pid: Int32?
+        let lines = content.components(separatedBy: .newlines)
+        if let caffeinateLineIndex = lines.firstIndex(where: { $0.hasPrefix("CAFFEINATE_PID=") }),
+           let pidString = lines[caffeinateLineIndex].components(separatedBy: "=").last {
+            // New format: CAFFEINATE_PID=12345
+            pid = Int32(pidString.trimmingCharacters(in: .whitespacesAndNewlines))
+        } else {
+            // Old format: just the PID number
+            pid = Int32(content.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+
+        guard let caffeinatePid = pid else {
+            transitionToIdle()
+            return
+        }
+
+        let isAlive = kill(caffeinatePid, 0) == 0
 
         if isAlive {
             transitionToWorking()
@@ -118,5 +134,25 @@ public final class StatusMonitor {
             workingStartTime = nil
             status = .idle
         }
+    }
+
+    /// Get the Claude process PID that's preventing sleep
+    public func getActiveClaudePID() -> Int32? {
+        let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: pidFilePath),
+              let content = try? String(contentsOfFile: pidFilePath, encoding: .utf8) else {
+            return nil
+        }
+
+        // Parse new format: "CAFFEINATE_PID=12345\nCLAUDE_PID=6789"
+        let lines = content.components(separatedBy: .newlines)
+        for line in lines where line.hasPrefix("CLAUDE_PID=") {
+            let pidString = String(line.dropFirst(11)) // Remove "CLAUDE_PID="
+            if let pid = Int32(pidString), kill(pid, 0) == 0 { // Verify process is alive
+                return pid
+            }
+        }
+
+        return nil
     }
 }
