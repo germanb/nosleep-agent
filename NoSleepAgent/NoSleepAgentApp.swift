@@ -3,14 +3,16 @@ import NoSleepAgentLib
 
 @main
 struct NoSleepAgentApp: App {
-    @State private var notificationManager = NotificationManager()
+    @State private var notificationManager: NotificationManager
     @State private var monitor: StatusMonitor
     @AppStorage("notificationsEnabled") private var notificationsEnabled = false
 
     init() {
-        let notifManager = NotificationManager()
+        let notifManager = MainActor.assumeIsolated { NotificationManager() }
         _notificationManager = State(initialValue: notifManager)
-        _monitor = State(initialValue: StatusMonitor(notificationManager: notifManager))
+        _monitor = State(initialValue: MainActor.assumeIsolated {
+            StatusMonitor(notificationManager: notifManager)
+        })
     }
 
     var body: some Scene {
