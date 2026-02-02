@@ -32,12 +32,17 @@ Get notified when long-running tasks (≥5 minutes) complete.
 ## Installation
 
 ### Quick Install (Recommended)
-Ask Claude Code:
-```
-Install https://github.com/germanb/nosleep-agent
+```bash
+# Download latest release
+curl -L -o NoSleepAgent.app.zip https://github.com/germanb/nosleep-agent/releases/latest/download/NoSleepAgent.app.zip
+unzip NoSleepAgent.app.zip
+open NoSleepAgent.app
+
+# Or via Claude Code:
+# Ask Claude Code: "Install https://github.com/germanb/nosleep-agent"
 ```
 
-### Manual Install
+### Build from Source
 ```bash
 git clone https://github.com/germanb/nosleep-agent.git
 cd nosleep-agent
@@ -45,6 +50,7 @@ cd nosleep-agent
 open NoSleepAgent.app
 ```
 
+### Setup Hooks
 Add hooks to `~/.claude/settings.json`:
 ```json
 {
@@ -94,6 +100,15 @@ log stream --predicate 'subsystem == "com.nosleep.agent"' --level debug
 
 - macOS 14.0 or later
 - Claude Code CLI
+
+## Releases
+
+New versions are automatically built and published to [GitHub Releases](https://github.com/germanb/nosleep-agent/releases).
+
+To create a new release:
+1. Tag a commit: `git tag -a v1.0.0 -m "Release notes"`
+2. Push the tag: `git push origin v1.0.0`
+3. GitHub Actions builds and publishes automatically
 
 ## Contributing
 

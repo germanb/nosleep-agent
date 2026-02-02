@@ -1,0 +1,59 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: macos-14
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Extract version from tag
+      id: version
+      run: echo "APP_VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+    - name: Build release
+      run: |
+        swift build -c release
+
+        # Create app bundle structure
+        mkdir -p NoSleepAgent.app/Contents/MacOS
+        mkdir -p NoSleepAgent.app/Contents/Resources
+
+        # Copy executable
+        cp .build/release/NoSleepAgent NoSleepAgent.app/Contents/MacOS/
+
+        # Copy Info.plist
+        cp Info.plist NoSleepAgent.app/Contents/Info.plist
+
+        # Update version in Info.plist
+        /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${{ steps.version.outputs.APP_VERSION }}" NoSleepAgent.app/Contents/Info.plist
+
+        # Zip the app
+        zip -r NoSleepAgent.app.zip NoSleepAgent.app
+
+    - name: Create Release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh release create ${{ github.ref_name }} \
+          NoSleepAgent.app.zip \
+          --title "NoSleepAgent ${{ github.ref_name }}" \
+          --notes-file - <<EOF
+        ## NoSleepAgent ${{ github.ref_name }}
+
+        Download NoSleepAgent.app.zip and unzip to get started.
+
+        ### Installation
+        \`\`\`bash
+        unzip NoSleepAgent.app.zip
+        open NoSleepAgent.app
+        \`\`\`
+
+        See the [README](https://github.com/germanb/nosleep-agent#readme) for configuration instructions.
+        EOF
