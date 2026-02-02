@@ -29,7 +29,7 @@ jobs:
         cp .build/release/NoSleepAgent NoSleepAgent.app/Contents/MacOS/
 
         # Copy Info.plist
-        cp Info.plist NoSleepAgent.app/Contents/Info.plist
+        cp NoSleepAgent/Info.plist NoSleepAgent.app/Contents/Info.plist
 
         # Update version in Info.plist
         /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${{ steps.version.outputs.APP_VERSION }}" NoSleepAgent.app/Contents/Info.plist
