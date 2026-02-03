@@ -7,7 +7,7 @@ import SwiftUI
 public final class StatusMonitor {
     public private(set) var status: ClaudeStatus = .idle
 
-    private let pidFilePattern = "/tmp/claude-caffeinate-"
+    private let pidFilePattern = "/tmp/claude-caffeinate-session-"
     private let sessionParser = SessionParser()
     private var fileDescriptor: Int32 = -1
     private var dispatchSource: DispatchSourceFileSystemObject?
@@ -87,7 +87,7 @@ public final class StatusMonitor {
         // Get all PID files in /tmp matching our pattern
         do {
             let tmpContents = try fileManager.contentsOfDirectory(atPath: "/tmp")
-            let pidFiles = tmpContents.filter { $0.hasPrefix("claude-caffeinate-") && $0.hasSuffix(".pid") }
+            let pidFiles = tmpContents.filter { $0.hasPrefix("claude-caffeinate-session-") && $0.hasSuffix(".pid") }
 
             for pidFile in pidFiles {
                 let fullPath = "/tmp/\(pidFile)"
@@ -176,7 +176,7 @@ public final class StatusMonitor {
 
         do {
             let tmpContents = try fileManager.contentsOfDirectory(atPath: "/tmp")
-            let pidFiles = tmpContents.filter { $0.hasPrefix("claude-caffeinate-") && $0.hasSuffix(".pid") }
+            let pidFiles = tmpContents.filter { $0.hasPrefix("claude-caffeinate-session-") && $0.hasSuffix(".pid") }
 
             for pidFile in pidFiles {
                 let fullPath = "/tmp/\(pidFile)"

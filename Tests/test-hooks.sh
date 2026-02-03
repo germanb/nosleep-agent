@@ -77,7 +77,8 @@ cleanup() {
     pkill -f "caffeinate.*test-session" 2>/dev/null || true
     # Remove test PID files
     rm -f /tmp/claude-caffeinate-test-*.pid
-    rm -f /tmp/claude-caffeinate-*.pid.test
+    rm -f /tmp/claude-caffeinate-session-*.pid.test
+    rm -f /tmp/claude-caffeinate-session-*.pid
 }
 
 # Cleanup before and after tests
@@ -94,8 +95,8 @@ echo -e "${YELLOW}Test 1: Unique PID files per session${NC}"
 
 # Manually create PID files to test the naming pattern and format
 # (Since we can't override PPID, we test the file structure directly)
-PID_FILE_1="/tmp/claude-caffeinate-10001.pid"
-PID_FILE_2="/tmp/claude-caffeinate-10002.pid"
+PID_FILE_1="/tmp/claude-caffeinate-session-10001.pid"
+PID_FILE_2="/tmp/claude-caffeinate-session-10002.pid"
 
 # Create test PID files
 caffeinate -dims >/dev/null 2>&1 &
@@ -103,6 +104,8 @@ CAFF_PID_1=$!
 cat > "$PID_FILE_1" <<EOF
 CAFFEINATE_PID=$CAFF_PID_1
 CLAUDE_PID=10001
+SESSION_PID=10001
+START_EPOCH=$(date +%s)
 EOF
 
 caffeinate -dims >/dev/null 2>&1 &
@@ -110,6 +113,8 @@ CAFF_PID_2=$!
 cat > "$PID_FILE_2" <<EOF
 CAFFEINATE_PID=$CAFF_PID_2
 CLAUDE_PID=10002
+SESSION_PID=10002
+START_EPOCH=$(date +%s)
 EOF
 
 assert_file_exists "$PID_FILE_1"
@@ -152,26 +157,31 @@ echo
 echo -e "${YELLOW}Test 3: Orphan cleanup for dead sessions${NC}"
 
 # Create a fake orphan (PID file for a Claude process that doesn't exist)
-ORPHAN_FILE="/tmp/claude-caffeinate-99999.pid"
+ORPHAN_FILE="/tmp/claude-caffeinate-session-99999.pid"
 caffeinate -dims >/dev/null 2>&1 &
 ORPHAN_CAFF_PID=$!
 cat > "$ORPHAN_FILE" <<EOF
 CAFFEINATE_PID=$ORPHAN_CAFF_PID
 CLAUDE_PID=99999
+SESSION_PID=99999
+START_EPOCH=$(date +%s)
 EOF
 
 assert_file_exists "$ORPHAN_FILE"
 assert_process_alive "$ORPHAN_CAFF_PID"
 
 # Simulate orphan cleanup logic from allow-sleep.sh
-for pid_file in /tmp/claude-caffeinate-*.pid; do
+for pid_file in /tmp/claude-caffeinate-session-*.pid; do
     [ -f "$pid_file" ] || continue
 
-    claude_pid=$(basename "$pid_file" | sed 's/claude-caffeinate-\([0-9]*\)\.pid/\1/')
+    session_pid=$(grep '^SESSION_PID=' "$pid_file" 2>/dev/null | cut -d'=' -f2)
+    if [ -z "$session_pid" ]; then
+        session_pid=$(basename "$pid_file" | sed 's/claude-caffeinate-session-\([0-9]*\)\.pid/\1/')
+    fi
 
-    # Check if Claude process still exists
-    if ! kill -0 "$claude_pid" 2>/dev/null; then
-        # Claude is dead, kill its caffeinate
+    # Check if session process still exists
+    if [ -z "$session_pid" ] || ! kill -0 "$session_pid" 2>/dev/null; then
+        # Session is dead, kill its caffeinate
         caffeinate_pid=$(grep '^CAFFEINATE_PID=' "$pid_file" 2>/dev/null | cut -d'=' -f2)
         if [ -n "$caffeinate_pid" ]; then
             kill "$caffeinate_pid" 2>/dev/null
@@ -198,19 +208,21 @@ echo
 # Test 4: PID file format validation
 echo -e "${YELLOW}Test 4: PID file format validation${NC}"
 
-PID_FILE_3="/tmp/claude-caffeinate-10003.pid"
+PID_FILE_3="/tmp/claude-caffeinate-session-10003.pid"
 caffeinate -dims >/dev/null 2>&1 &
 CAFF_PID_3=$!
 
 cat > "$PID_FILE_3" <<EOF
 CAFFEINATE_PID=$CAFF_PID_3
 CLAUDE_PID=10003
+SESSION_PID=10003
+START_EPOCH=$(date +%s)
 EOF
 
 assert_file_exists "$PID_FILE_3"
 
 # Check format
-if grep -q '^CAFFEINATE_PID=' "$PID_FILE_3" && grep -q '^CLAUDE_PID=' "$PID_FILE_3"; then
+if grep -q '^CAFFEINATE_PID=' "$PID_FILE_3" && grep -q '^CLAUDE_PID=' "$PID_FILE_3" && grep -q '^SESSION_PID=' "$PID_FILE_3"; then
     echo -e "${GREEN}✓${NC} PID file has correct format"
     ((passed++))
 else

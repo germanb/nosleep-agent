@@ -2,7 +2,8 @@
 
 # Fork to background immediately if not already forked
 if [[ "$1" != "--forked" ]]; then
-    "$0" --forked >/dev/null 2>&1 &
+    SESSION_PID=$PPID
+    "$0" --forked "$SESSION_PID" >/dev/null 2>&1 &
     exit 0
 fi
 
@@ -22,20 +23,29 @@ find_claude_pid() {
     echo ""
 }
 
-# Get Claude PID first to create unique PID file
+# Session PID passed from the non-forked invocation
+SESSION_PID="$2"
+if [[ -z "$SESSION_PID" ]]; then
+    SESSION_PID=$PPID
+fi
+
+# Get Claude PID for metadata
 CLAUDE_PID=$(find_claude_pid)
 if [[ -z "$CLAUDE_PID" ]]; then
     # Fallback: use PPID if we can't find Claude in parent chain
     CLAUDE_PID=$PPID
 fi
 
-PID_FILE="/tmp/claude-caffeinate-${CLAUDE_PID}.pid"
+PID_FILE="/tmp/claude-caffeinate-session-${SESSION_PID}.pid"
 
 # Check if already running
 if [[ -f "$PID_FILE" ]]; then
     caffeinate_pid=$(grep '^CAFFEINATE_PID=' "$PID_FILE" 2>/dev/null | cut -d'=' -f2)
     [[ -z "$caffeinate_pid" ]] && caffeinate_pid=$(cat "$PID_FILE")
-    kill -0 "$caffeinate_pid" 2>/dev/null && exit 0
+    if [[ -n "$caffeinate_pid" ]] && kill -0 "$caffeinate_pid" 2>/dev/null; then
+        exit 0
+    fi
+    rm -f "$PID_FILE"
 fi
 
 # Start caffeinate
@@ -43,7 +53,12 @@ caffeinate -dims >/dev/null 2>&1 &
 caffeinate_pid=$!
 
 # Store PIDs
-cat > "$PID_FILE" <<EOF
+START_EPOCH=$(date +%s)
+TMP_FILE="/tmp/claude-caffeinate-session-${SESSION_PID}.pid.tmp"
+cat > "$TMP_FILE" <<EOF
 CAFFEINATE_PID=$caffeinate_pid
 CLAUDE_PID=$CLAUDE_PID
+SESSION_PID=$SESSION_PID
+START_EPOCH=$START_EPOCH
 EOF
+mv "$TMP_FILE" "$PID_FILE"

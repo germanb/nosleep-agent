@@ -1,26 +1,12 @@
 #!/bin/bash
 
-# Function to find Claude process PID by walking up parent chain
-find_claude_pid() {
-    local pid=$PPID
-    while [[ $pid -gt 1 ]]; do
-        local cmd=$(ps -p $pid -o comm= 2>/dev/null)
-        if [[ "$cmd" =~ (claude|node|electron) ]]; then
-            echo $pid
-            return
-        fi
-        pid=$(ps -p $pid -o ppid= 2>/dev/null | tr -d ' ')
-    done
-    echo ""
-}
-
-# Get Claude PID to find the right PID file
-CLAUDE_PID=$(find_claude_pid)
-if [[ -z "$CLAUDE_PID" ]]; then
-    CLAUDE_PID=$PPID
+# Session PID (caller) to find the right PID file
+SESSION_PID="$1"
+if [[ -z "$SESSION_PID" ]]; then
+    SESSION_PID=$PPID
 fi
 
-PID_FILE="/tmp/claude-caffeinate-${CLAUDE_PID}.pid"
+PID_FILE="/tmp/claude-caffeinate-session-${SESSION_PID}.pid"
 
 if [[ -f "$PID_FILE" ]]; then
     caffeinate_pid=$(grep '^CAFFEINATE_PID=' "$PID_FILE" 2>/dev/null | cut -d'=' -f2)
@@ -31,15 +17,18 @@ if [[ -f "$PID_FILE" ]]; then
 fi
 
 # Cleanup orphaned caffeinate processes from dead Claude sessions
-for pid_file in /tmp/claude-caffeinate-*.pid; do
+for pid_file in /tmp/claude-caffeinate-session-*.pid; do
     [[ -f "$pid_file" ]] || continue
 
-    # Extract Claude PID from filename
-    claude_pid=$(basename "$pid_file" | sed 's/claude-caffeinate-\([0-9]*\)\.pid/\1/')
+    # Extract session PID from file contents (fallback to filename)
+    session_pid=$(grep '^SESSION_PID=' "$pid_file" 2>/dev/null | cut -d'=' -f2)
+    if [[ -z "$session_pid" ]]; then
+        session_pid=$(basename "$pid_file" | sed 's/claude-caffeinate-session-\([0-9]*\)\.pid/\1/')
+    fi
 
-    # Check if Claude process still exists
-    if ! kill -0 "$claude_pid" 2>/dev/null; then
-        # Claude is dead, kill its caffeinate
+    # Check if session process still exists
+    if [[ -z "$session_pid" ]] || ! kill -0 "$session_pid" 2>/dev/null; then
+        # Session is dead, kill its caffeinate
         caffeinate_pid=$(grep '^CAFFEINATE_PID=' "$pid_file" 2>/dev/null | cut -d'=' -f2)
         if [[ -n "$caffeinate_pid" ]]; then
             kill "$caffeinate_pid" 2>/dev/null
