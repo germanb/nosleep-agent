@@ -7,7 +7,7 @@ import SwiftUI
 public final class StatusMonitor {
     public private(set) var status: ClaudeStatus = .idle
 
-    private let pidFilePath = "/tmp/claude-caffeinate.pid"
+    private let pidFilePattern = "/tmp/claude-caffeinate-session-"
     private let sessionParser = SessionParser()
     private var fileDescriptor: Int32 = -1
     private var dispatchSource: DispatchSourceFileSystemObject?
@@ -73,38 +73,71 @@ public final class StatusMonitor {
     }
 
     private func checkStatus() {
-        let fileManager = FileManager.default
-
-        guard fileManager.fileExists(atPath: pidFilePath),
-              let content = try? String(contentsOfFile: pidFilePath, encoding: .utf8) else {
-            transitionToIdle()
-            return
-        }
-
-        // Parse PID file (supports both new and old formats)
-        let pid: Int32?
-        let lines = content.components(separatedBy: .newlines)
-        if let caffeinateLineIndex = lines.firstIndex(where: { $0.hasPrefix("CAFFEINATE_PID=") }),
-           let pidString = lines[caffeinateLineIndex].components(separatedBy: "=").last {
-            // New format: CAFFEINATE_PID=12345
-            pid = Int32(pidString.trimmingCharacters(in: .whitespacesAndNewlines))
-        } else {
-            // Old format: just the PID number
-            pid = Int32(content.trimmingCharacters(in: .whitespacesAndNewlines))
-        }
-
-        guard let caffeinatePid = pid else {
-            transitionToIdle()
-            return
-        }
-
-        let isAlive = kill(caffeinatePid, 0) == 0
-
-        if isAlive {
+        // Check if any caffeinate process from our hooks is running
+        if hasAnyCaffeinateProcess() {
             transitionToWorking()
         } else {
             transitionToIdle()
         }
+    }
+
+    private func hasAnyCaffeinateProcess() -> Bool {
+        let fileManager = FileManager.default
+
+        // Get all PID files in /tmp matching our pattern
+        do {
+            let tmpContents = try fileManager.contentsOfDirectory(atPath: "/tmp")
+            let pidFiles = tmpContents.filter { $0.hasPrefix("claude-caffeinate-session-") && $0.hasSuffix(".pid") }
+
+            for pidFile in pidFiles {
+                let fullPath = "/tmp/\(pidFile)"
+                guard let content = try? String(contentsOfFile: fullPath, encoding: .utf8) else {
+                    continue
+                }
+
+                // Parse caffeinate PID
+                let lines = content.components(separatedBy: .newlines)
+                if let caffeinateLine = lines.first(where: { $0.hasPrefix("CAFFEINATE_PID=") }),
+                   let pidString = caffeinateLine.components(separatedBy: "=").last,
+                   let caffeinatePid = Int32(pidString.trimmingCharacters(in: .whitespacesAndNewlines)) {
+
+                    // Check if this caffeinate process is still alive
+                    if kill(caffeinatePid, 0) == 0 {
+                        return true
+                    }
+                }
+            }
+        } catch {
+            // If we can't read /tmp, fall back to checking for any caffeinate process
+            return checkForAnyCaffeinateProcessViaProcFS()
+        }
+
+        return false
+    }
+
+    private func checkForAnyCaffeinateProcessViaProcFS() -> Bool {
+        // Fallback: check if any caffeinate process with -dims flag is running
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/ps")
+        task.arguments = ["aux"]
+
+        let pipe = Pipe()
+        task.standardOutput = pipe
+
+        do {
+            try task.run()
+            task.waitUntilExit()
+
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            if let output = String(data: data, encoding: .utf8) {
+                // Look for caffeinate processes with -dims flag
+                return output.contains("caffeinate -dims")
+            }
+        } catch {
+            return false
+        }
+
+        return false
     }
 
     private func transitionToWorking() {
@@ -137,21 +170,30 @@ public final class StatusMonitor {
         }
     }
 
-    /// Get the Claude process PID that's preventing sleep
+    /// Get the first active Claude process PID that's preventing sleep
     public func getActiveClaudePID() -> Int32? {
         let fileManager = FileManager.default
-        guard fileManager.fileExists(atPath: pidFilePath),
-              let content = try? String(contentsOfFile: pidFilePath, encoding: .utf8) else {
-            return nil
-        }
 
-        // Parse new format: "CAFFEINATE_PID=12345\nCLAUDE_PID=6789"
-        let lines = content.components(separatedBy: .newlines)
-        for line in lines where line.hasPrefix("CLAUDE_PID=") {
-            let pidString = String(line.dropFirst(11)) // Remove "CLAUDE_PID="
-            if let pid = Int32(pidString), kill(pid, 0) == 0 { // Verify process is alive
-                return pid
+        do {
+            let tmpContents = try fileManager.contentsOfDirectory(atPath: "/tmp")
+            let pidFiles = tmpContents.filter { $0.hasPrefix("claude-caffeinate-session-") && $0.hasSuffix(".pid") }
+
+            for pidFile in pidFiles {
+                let fullPath = "/tmp/\(pidFile)"
+                guard let content = try? String(contentsOfFile: fullPath, encoding: .utf8) else {
+                    continue
+                }
+
+                let lines = content.components(separatedBy: .newlines)
+                for line in lines where line.hasPrefix("CLAUDE_PID=") {
+                    let pidString = String(line.dropFirst(11))
+                    if let pid = Int32(pidString), kill(pid, 0) == 0 {
+                        return pid
+                    }
+                }
             }
+        } catch {
+            return nil
         }
 
         return nil
